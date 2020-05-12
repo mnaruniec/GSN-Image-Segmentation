@@ -18,16 +18,61 @@ from input import get_dataloaders
 
 
 class SegNet(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(
+            self,
+            conv_channels=DEFAULT_CONV_CHANNELS,
+            convs_per_block=DEFAULT_CONVS_PER_BLOCK,
+            max_pool_sizes=DEFAULT_MAX_POOL_SIZES,
+    ):
         super().__init__()
 
-        self.layers = [
-            nn.Conv2d(in_channels=3, out_channels=2, kernel_size=3, padding=1)
-        ]
+        assert len(max_pool_sizes) == len(conv_channels) - 1
 
-        self.model = nn.Sequential(*self.layers)
+        conv_blocks = []
+        for in_channels, out_channels in zip([IMG_CHANNELS] + conv_channels, conv_channels):
+            block_layers = []
+            for i in range(convs_per_block):
+                in_channels = out_channels if i else in_channels
+
+                block_layers += [
+                    nn.BatchNorm2d(num_features=in_channels),
+                    nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1),
+                    nn.ReLU,
+                ]
+
+            conv_blocks.append(nn.Sequential(*block_layers))
+
+        self.conv_blocks = nn.ModuleList(conv_blocks)
+
+        self.pool_layers = nn.ModuleList(
+            [nn.MaxPool2d(kernel_size=size, return_indices=True) for size in max_pool_sizes]
+        )
+
+        upconv_blocks = []
+        for in_channels, out_channels in reversed(zip(conv_channels[1:], conv_channels)):
+            block_layers = []
+            for i in range(convs_per_block):
+                in_channels = out_channels if i else in_channels + out_channels
+
+                block_layers += [
+                    nn.BatchNorm2d(num_features=in_channels),
+                    nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1),
+                    nn.ReLU,
+                ]
+
+            upconv_blocks.append(nn.Sequential(*block_layers))
+
+        self.conv_blocks = nn.ModuleList(upconv_blocks)
+
+        self.unpool_layers = nn.ModuleList(
+            [nn.MaxUnpool2d(kernel_size=size) for size in reversed(max_pool_sizes)]
+        )
+
+        self.last_layer = nn.Conv2d(in_channels=conv_channels[0], out_channels=2, kernel_size=1)
+
 
     def forward(self, x):
+        # TODO
         return self.model(x)
 
 

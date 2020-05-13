@@ -1,7 +1,12 @@
+from typing import List, Optional
+
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 
 from constants import *
+from transforms import *
+
+DEFAULT_TRAIN_AUGMENTATIONS = [Identity(), HorizontalFlip(), Rotation90(), Rotation270()]
 
 
 class PreprocessDataLoader(DataLoader):
@@ -19,25 +24,37 @@ class GPUDataLoader(PreprocessDataLoader):
         return x.float().to(DEVICE), y.to(DEVICE)
 
 
-def load_file(path: str, is_labels=False):
+def load_file(path: str, is_labels=False, augmentations: List[ReversibleTransform] = [Identity()]):
+    assert augmentations
+
     input = torch.tensor(np.load(path), dtype=torch.long if is_labels else torch.float)
     input = input.permute((0, 3, 1, 2))
-    input = input.squeeze()
     input = input // 255 if is_labels else input / 255
+    input = input.squeeze()
+
+    tensors = [aug.apply(input) for aug in augmentations]
+    input = torch.cat(tensors, dim=0)
 
     return input
 
 
-def get_dataloader(x_path: str, y_path: str, shuffle: bool, drop_last: bool, mb_size=DEFAULT_MB_SIZE):
-    xs = load_file(x_path)
-    ys = load_file(y_path, is_labels=True)
+def get_dataloader(
+        x_path: str,
+        y_path: str,
+        shuffle: bool,
+        drop_last: bool,
+        mb_size=DEFAULT_MB_SIZE,
+        augmentations = [Identity()]
+):
+    xs = load_file(x_path, augmentations=augmentations)
+    ys = load_file(y_path, augmentations=augmentations, is_labels=True)
 
     ds = TensorDataset(xs, ys)
     return GPUDataLoader(dataset=ds, batch_size=mb_size, shuffle=shuffle, drop_last=drop_last, pin_memory=True)
 
 
-def get_dataloaders():
-    train_dl = get_dataloader(TRAIN_X_PATH, TRAIN_Y_PATH, shuffle=True, drop_last=True)
+def get_dataloaders(train_augmentations=DEFAULT_TRAIN_AUGMENTATIONS):
+    train_dl = get_dataloader(TRAIN_X_PATH, TRAIN_Y_PATH, shuffle=True, drop_last=True, augmentations=train_augmentations)
     test_dl = get_dataloader(TEST_X_PATH, TEST_Y_PATH, shuffle=False, drop_last=False)
     valid_dl = test_dl
 

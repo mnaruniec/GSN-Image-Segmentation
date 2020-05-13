@@ -15,6 +15,7 @@ from matplotlib import pyplot as plt
 
 from constants import *
 from input import get_dataloaders
+from utils import iou
 
 
 class SegNet(nn.Module):
@@ -135,39 +136,47 @@ class SegTrainer:
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = self.optimizer_lambda(self.net.parameters())
 
-    def evaluate_on(self, dataloader: DataLoader, full=False) -> (float, int, float):
-        # TODO add IOU
+    def evaluate_on(self, dataloader: DataLoader, full=False) -> (float, int, float, float):
+        """ Returns (pixel_acc, pixel_count, avg_loss, avg_iou) """
         with torch.no_grad():
             net = self.net
             net.eval()
 
             correct = 0
-            total = 0
+            pixel_total = 0
 
             running_loss = 0.
             i = 0
+
+            iou_sum = 0.
+            img_total = 0
 
             for data in dataloader:
                 i += 1
                 images, labels = data
                 outputs = net(images)
                 _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0) * labels.size(1) * labels.size(2)
+
+                pixel_total += labels.size(0) * labels.size(1) * labels.size(2)
                 correct += (predicted == labels).sum().item()
 
                 loss = self.criterion(outputs, labels)
                 running_loss += loss.item()
 
+                img_total += len(labels)
+                for target, pred in zip(labels, predicted):
+                    iou_sum += iou(target, pred)
+
                 if not full and i >= self.stat_period:
                     break
 
         net.train()
-        return correct / total, total, running_loss / i
+        return correct / pixel_total, pixel_total, running_loss / i, iou_sum / img_total
 
     def run_evaluation(self, dataloader, ds_name: str):
-        acc, total, loss = self.evaluate_on(dataloader, full=True)
+        acc, total, loss, iou = self.evaluate_on(dataloader, full=True)
 
-        print(f'{ds_name} stats: acc: {(100 * acc):.2f}%, loss: {loss:.4f}')
+        print(f'{ds_name} stats: acc: {(100 * acc):.2f}%, iou: {(100 * iou):.2f}%, loss: {loss:.4f}')
 
         return acc, loss
 
@@ -216,12 +225,12 @@ class SegTrainer:
                         train_loss = train_loss / self.stat_period
                         train_losses.append(train_loss)
 
-                        acc, total, valid_loss = self.evaluate_on(self.valid_dl)
+                        acc, total, valid_loss, iou = self.evaluate_on(self.valid_dl)
 
                         valid_losses.append(valid_loss)
 
-                        print('Epoch %d, batch %d, train loss: %.4f, valid loss: %.4f' %
-                              (epoch, i + 1, train_loss, valid_loss))
+                        print(f'Epoch {epoch}, batch {i + 1}, train loss: {train_loss:.4f}, '
+                              f'valid acc: {100 * acc:.2f}%, valid iou: {100 * iou:.2f}%, valid loss: {valid_loss:.4f}')
 
                         train_loss = 0.0
 

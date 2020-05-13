@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 
+from constants import *
+
 
 def show_censored_img(x, y):
     img = x.copy()
@@ -11,3 +13,14 @@ def show_censored_img(x, y):
 
     plt.imshow(img)
     plt.show()
+
+
+def iou(target, pred, verify_size=True):
+    if verify_size:
+        assert target.shape == pred.shape
+        assert target.shape == (IMG_SIZE, IMG_SIZE)
+
+    inter = torch.logical_and(target, pred)
+    union = torch.logical_or(target, pred)
+
+    return torch.sum(inter).float() / torch.sum(union)

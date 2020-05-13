@@ -37,7 +37,7 @@ class SegNet(nn.Module):
                 block_layers += [
                     nn.BatchNorm2d(num_features=in_channels),
                     nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1),
-                    nn.ReLU,
+                    nn.ReLU(),
                 ]
 
             conv_blocks.append(nn.Sequential(*block_layers))
@@ -45,35 +45,59 @@ class SegNet(nn.Module):
         self.conv_blocks = nn.ModuleList(conv_blocks)
 
         self.pool_layers = nn.ModuleList(
-            [nn.MaxPool2d(kernel_size=size, return_indices=True) for size in max_pool_sizes]
+            [nn.MaxPool2d(kernel_size=size) for size in max_pool_sizes]
         )
 
         upconv_blocks = []
-        for in_channels, out_channels in reversed(zip(conv_channels[1:], conv_channels)):
+        for out_channels in reversed(conv_channels[:-1]):
             block_layers = []
             for i in range(convs_per_block):
-                in_channels = out_channels if i else in_channels + out_channels
+                in_channels = out_channels if i else 2 * out_channels
 
                 block_layers += [
                     nn.BatchNorm2d(num_features=in_channels),
                     nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, padding=1),
-                    nn.ReLU,
+                    nn.ReLU(),
                 ]
 
             upconv_blocks.append(nn.Sequential(*block_layers))
 
-        self.conv_blocks = nn.ModuleList(upconv_blocks)
+        self.upconv_blocks = nn.ModuleList(upconv_blocks)
 
-        self.unpool_layers = nn.ModuleList(
-            [nn.MaxUnpool2d(kernel_size=size) for size in reversed(max_pool_sizes)]
+        self.upsample_layers = nn.ModuleList(
+            [nn.ConvTranspose2d(in_channels=in_channels, out_channels=out_channels, kernel_size=size, stride=size)
+                for in_channels, out_channels, size in reversed(list(zip(
+                    conv_channels[1:],
+                    conv_channels,
+                    max_pool_sizes
+                )))
+            ]
         )
 
         self.last_layer = nn.Conv2d(in_channels=conv_channels[0], out_channels=2, kernel_size=1)
 
-
     def forward(self, x):
-        # TODO
-        return self.model(x)
+        conv_tensors = []
+
+        for conv, pool in zip(self.conv_blocks, self.pool_layers):
+            x = conv(x)
+            conv_tensors.append(x)
+            x = pool(x)
+
+        x = self.conv_blocks[-1](x)
+
+        for upsample, upconv, skip in zip(
+                self.upsample_layers,
+                self.upconv_blocks,
+                reversed(conv_tensors),
+        ):
+            x = upsample(x)
+            x = torch.cat([x, skip], dim=1)
+            x = upconv(x)
+
+        x = self.last_layer(x)
+
+        return x
 
 
 class SegTrainer:

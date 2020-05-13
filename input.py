@@ -6,8 +6,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from constants import *
 from transforms import *
 
-DEFAULT_TRAIN_AUGMENTATIONS = [Identity(), HorizontalFlip(), Rotation90(), Rotation270()]
-
 
 class PreprocessDataLoader(DataLoader):
     def __iter__(self):
@@ -44,7 +42,7 @@ def get_dataloader(
         shuffle: bool,
         drop_last: bool,
         mb_size=DEFAULT_MB_SIZE,
-        augmentations = [Identity()]
+        augmentations = [Identity()],
 ):
     xs = load_file(x_path, augmentations=augmentations)
     ys = load_file(y_path, augmentations=augmentations, is_labels=True)
@@ -53,7 +51,7 @@ def get_dataloader(
     return GPUDataLoader(dataset=ds, batch_size=mb_size, shuffle=shuffle, drop_last=drop_last, pin_memory=True)
 
 
-def get_dataloaders(train_augmentations=DEFAULT_TRAIN_AUGMENTATIONS):
+def get_dataloaders(train_augmentations=[Identity()]):
     train_dl = get_dataloader(TRAIN_X_PATH, TRAIN_Y_PATH, shuffle=True, drop_last=True, augmentations=train_augmentations)
     test_dl = get_dataloader(TEST_X_PATH, TEST_Y_PATH, shuffle=False, drop_last=False)
     valid_dl = test_dl

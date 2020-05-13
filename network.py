@@ -15,7 +15,12 @@ from matplotlib import pyplot as plt
 
 from constants import *
 from input import get_dataloaders
+from transforms import *
 from utils import iou
+
+
+DEFAULT_TRAIN_AUGMENTATIONS = [Identity(), HorizontalFlip(), Rotation90(), Rotation270()]
+DEFAULT_SELF_AUGMENTATIONS = DEFAULT_TRAIN_AUGMENTATIONS
 
 
 class SegNet(nn.Module):
@@ -109,9 +114,15 @@ class SegTrainer:
             num_epochs=DEFAULT_NUM_EPOCHS,
             patience=DEFAULT_PATIENCE,
             stat_period=DEFAULT_STAT_PERIOD,
+            stat_mbs=DEFAULT_STAT_MBS,
             epoch_train_eval=DEFAULT_EPOCH_TRAIN_EVAL,
+            self_augmentations=DEFAULT_SELF_AUGMENTATIONS,
+            train_augmentations=DEFAULT_TRAIN_AUGMENTATIONS,
             **net_kwargs,
     ):
+        assert self_augmentations
+        assert train_augmentations
+
         self.net_kwargs = net_kwargs
 
         self.optimizer_lambda = optimizer_lambda
@@ -120,13 +131,15 @@ class SegTrainer:
         self.num_epochs = num_epochs
         self.patience = patience
         self.stat_period = stat_period
+        self.stat_mbs = stat_mbs
         self.epoch_train_eval = epoch_train_eval
+        self.self_augmentations = self_augmentations
 
         self.net = None
         self.criterion = None
         self.optimizer = None
 
-        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders()
+        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(train_augmentations=train_augmentations)
 
     def init_net(self):
         self.net = SegNet(**self.net_kwargs)
@@ -154,7 +167,15 @@ class SegTrainer:
             for data in dataloader:
                 i += 1
                 images, labels = data
-                outputs = net(images)
+
+                outputs = 0
+                for aug in self.self_augmentations:
+                    aug_images = aug.apply(images)
+                    aug_outputs = net(aug_images)
+                    outputs += aug.reverse(aug_outputs)
+
+                outputs /= len(self.self_augmentations)
+
                 _, predicted = torch.max(outputs.data, 1)
 
                 pixel_total += labels.size(0) * labels.size(1) * labels.size(2)
@@ -167,7 +188,7 @@ class SegTrainer:
                 for target, pred in zip(labels, predicted):
                     iou_sum += iou(target, pred)
 
-                if not full and i >= self.stat_period:
+                if not full and i >= self.stat_mbs:
                     break
 
         net.train()
@@ -266,6 +287,6 @@ class SegTrainer:
                 self.net.load_state_dict(best_state_dict)
 
             acc, loss = self.run_evaluation(self.test_dl, 'TEST')
-            self.run_evaluation(self.train_dl, 'TRAIN')
+            #self.run_evaluation(self.train_dl, 'TRAIN')
 
             return acc, loss

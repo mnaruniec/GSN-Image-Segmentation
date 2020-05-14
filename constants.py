@@ -7,6 +7,8 @@ TRAIN_Y_PATH = DATA_PATH + "gsn_msk_uint8.npy"
 TEST_X_PATH = DATA_PATH + "test_gsn_image.npy"
 TEST_Y_PATH = DATA_PATH + "test_gsn_mask.npy"
 
+SNAPSHOT_PATH = "./snapshots/"
+
 IMG_SIZE = 128
 IMG_CHANNELS = 3
 

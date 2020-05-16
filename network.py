@@ -298,3 +298,7 @@ class SegTrainer:
             #self.run_evaluation(self.train_dl, 'TRAIN')
 
             return acc, loss
+
+    def load_snapshot(self, path: str = BEST_SNAPSHOT_PATH):
+        self.init_net()
+        self.net.load_state_dict(torch.load(path))

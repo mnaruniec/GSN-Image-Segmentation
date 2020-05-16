@@ -8,7 +8,7 @@ TEST_X_PATH = DATA_PATH + "test_gsn_image.npy"
 TEST_Y_PATH = DATA_PATH + "test_gsn_mask.npy"
 
 SNAPSHOT_PATH = "./snapshots/"
-BEST_SNAPSHOT_PATH = "./snapshots/Snap_a9667_i9339_15_05_2020_00_51"
+BEST_SNAPSHOT_PATH = "./snapshots/Snap_a9674_i9383_14_05_2020_15_28"
 
 IMG_SIZE = 128
 IMG_CHANNELS = 3

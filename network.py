@@ -2,7 +2,8 @@ from copy import deepcopy
 from datetime import datetime
 from functools import partial
 
-from torch import nn, optim, Tensor
+from albumentations import Blur, JpegCompression, HueSaturationValue, GaussNoise
+from torch import nn, optim
 from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 
@@ -14,6 +15,12 @@ from utils import iou
 
 DEFAULT_TRAIN_AUGMENTATIONS = [Identity(), HorizontalFlip(), Rotation90(), Rotation270()]
 DEFAULT_SELF_AUGMENTATIONS = DEFAULT_TRAIN_AUGMENTATIONS
+DEFAULT_FLY_ALBUMENTATIONS = [
+    Blur(p=0.15),
+    JpegCompression(quality_lower=40, quality_upper=80, p=0.15),
+    HueSaturationValue(hue_shift_limit=172, sat_shift_limit=20, val_shift_limit=27, p=0.15),
+    GaussNoise(p=0.15),
+]
 
 
 class SegNet(nn.Module):
@@ -111,6 +118,7 @@ class SegTrainer:
             epoch_train_eval=DEFAULT_EPOCH_TRAIN_EVAL,
             self_augmentations=DEFAULT_SELF_AUGMENTATIONS,
             train_augmentations=DEFAULT_TRAIN_AUGMENTATIONS,
+            fly_albumentations=DEFAULT_FLY_ALBUMENTATIONS,
             **net_kwargs,
     ):
         assert self_augmentations
@@ -132,7 +140,10 @@ class SegTrainer:
         self.criterion = None
         self.optimizer = None
 
-        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(train_augmentations=train_augmentations)
+        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(
+            train_augmentations=train_augmentations,
+            fly_albumentations=fly_albumentations,
+        )
 
     def init_net(self):
         self.net = SegNet(**self.net_kwargs)

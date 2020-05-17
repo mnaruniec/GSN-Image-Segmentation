@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import torch
 
 from constants import *
 
@@ -24,3 +25,10 @@ def iou(target, pred, verify_size=True):
     union = torch.logical_or(target, pred)
 
     return torch.sum(inter).float() / torch.sum(union)
+
+
+def entropy(x):
+    x = torch.nn.Softmax2d()(x)
+    log = torch.log2(x)
+    x = -x * log
+    return torch.sum(x, dim=-3)

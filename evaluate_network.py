@@ -6,10 +6,10 @@ from constants import *
 from input import get_dataloader
 from network import SegTrainer
 
-X_PATH = TRAIN_X_PATH
-Y_PATH = TRAIN_Y_PATH
+X_PATH = TEST_X_PATH
+Y_PATH = TEST_Y_PATH
 MODEL_PATH = BEST_SNAPSHOT_PATH
-TOP_LOSSES_DIR = './report/img/train/'
+TOP_LOSSES_DIR = './report/img/test/'
 
 
 if __name__ == "__main__":

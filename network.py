@@ -10,8 +10,7 @@ from matplotlib import pyplot as plt
 from constants import *
 from input import get_dataloaders
 from transforms import *
-from utils import iou
-
+from utils import iou, entropy
 
 DEFAULT_TRAIN_AUGMENTATIONS = [Identity(), HorizontalFlip(), Rotation90(), Rotation270()]
 DEFAULT_SELF_AUGMENTATIONS = DEFAULT_TRAIN_AUGMENTATIONS
@@ -140,6 +139,7 @@ class SegTrainer:
         self.criterion = None
         self.optimizer = None
         self.top_losses = []
+        self.entropy_stats = {"TP": [], "TN": [], "FP": [], "FN": []}
 
         self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(
             train_augmentations=train_augmentations,
@@ -154,7 +154,8 @@ class SegTrainer:
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = self.optimizer_lambda(self.net.parameters())
 
-    def evaluate_on(self, dataloader: DataLoader, full=False, store_top_losses=0) -> (float, int, float, float):
+    def evaluate_on(self, dataloader: DataLoader, full=False, store_top_losses=0, store_entropy_stats=False)\
+            -> (float, int, float, float):
         """ Returns (pixel_acc, pixel_count, avg_loss, avg_iou) """
         with torch.no_grad():
             net = self.net
@@ -202,14 +203,36 @@ class SegTrainer:
                         self.top_losses.sort()
                         self.top_losses = self.top_losses[-store_top_losses:]
 
+                if store_entropy_stats:
+                    ent = entropy(outputs).cpu()
+
+                    for s in range(labels.shape[0]):
+                        for h in range(labels.shape[1]):
+                            for w in range(labels.shape[2]):
+                                target = labels[s][h][w]
+                                pred = predicted[s][h][w]
+
+                                if target and pred:
+                                    key = "TP"
+                                elif target and not pred:
+                                    key = "FN"
+                                elif not target and pred:
+                                    key = "FP"
+                                else:
+                                    key = "TN"
+
+                                self.entropy_stats[key].append(ent[s][h][w])
+
                 if not full and i >= self.stat_mbs:
                     break
 
         net.train()
         return correct / pixel_total, pixel_total, running_loss / i, iou_sum / img_total
 
-    def run_evaluation(self, dataloader, ds_name: str = '', store_top_losses=0):
-        acc, total, loss, iou = self.evaluate_on(dataloader, full=True, store_top_losses=store_top_losses)
+    def run_evaluation(self, dataloader, ds_name: str = '', store_top_losses=0, store_entropy_stats=False):
+        acc, total, loss, iou = self.evaluate_on(
+            dataloader, full=True, store_top_losses=store_top_losses, store_entropy_stats=store_entropy_stats
+        )
 
         print(f'{ds_name} stats: acc: {(100 * acc):.2f}%, iou: {(100 * iou):.2f}%, loss: {loss:.4f}')
 
